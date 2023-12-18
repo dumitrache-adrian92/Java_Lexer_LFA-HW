@@ -22,7 +22,7 @@ unordered_map<string, Class *> classes;
 
 class_keyword "class"
 public_keyword "public"
-whitespace [ \t\n]+
+whitespace [ \t\n\r\f\v]+
 letter [a-zA-Z]
 digit [0-9]
 underscore _
@@ -44,8 +44,8 @@ end_block_comment "*/"
 %s CLASS_KEYWORD
 /* next token will be a class name*/
 %s CLASS_NAME
-/* next token will be a semicolon */
-%s SEMICOLON
+/* next token will be an open brace */
+%s OPEN_BRACE
 
 %s INSIDE_CLASS
 %s OTHER_IMBRICATION
@@ -65,14 +65,11 @@ end_block_comment "*/"
     yy_push_state(BLOCK_COMMENT);
 }
 <BLOCK_COMMENT>{end_block_comment} {yy_pop_state();}
-<BLOCK_COMMENT>. { /* ignore */}
+<BLOCK_COMMENT>.|\n { /* ignore */}
 
 
 <INITIAL>{public_keyword} {
     if (isPublicClassDeclared) {
-        // print the rest of the text
-
-
         cout << "Eroare: 2 sau mai multe clase publice detectate" << endl;
         exit(1);
     }
@@ -91,7 +88,7 @@ end_block_comment "*/"
     }
 
     classes[yytext] = new Class(yytext);
-    BEGIN(SEMICOLON);
+    BEGIN(OPEN_BRACE);
 }
 
 <CLASS_NAME>{digit}{class_char}+  {
@@ -99,18 +96,24 @@ end_block_comment "*/"
     exit(1);
 }
 
-<SEMICOLON>{open_brace} { BEGIN(INSIDE_CLASS); }
+<OPEN_BRACE>{open_brace} { BEGIN(INSIDE_CLASS); }
 
 <INSIDE_CLASS>{open_brace} { yy_push_state(OTHER_IMBRICATION); }
 <INSIDE_CLASS>{close_brace} { BEGIN(INITIAL); }
 <INSIDE_CLASS>.|\n { /* ignore */ }
 
 <OTHER_IMBRICATION>{close_brace} { yy_pop_state(); }
+<OTHER_IMBRICATION>{open_brace} { yy_push_state(OTHER_IMBRICATION); }
+<OTHER_IMBRICATION>.|\n { /* ignore */ }
 
 
 
 {whitespace} { /* ignore whitespace */ }
-.|\n  {}
+
+. {
+    cout << "Invalid token" << endl;
+    exit(1);
+}
 %%
 
 int main(int argc, char **argv)
