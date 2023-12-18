@@ -3,6 +3,8 @@
 using namespace std;
 extern "C" int yylex();
 
+bool isPublicClassDeclared = false;
+
 class Class
 {
  public:
@@ -19,11 +21,14 @@ unordered_map<string, Class *> classes;
 %}
 
 class_keyword "class"
+public_keyword "public"
 whitespace [ \t\n]+
 letter [a-zA-Z]
 digit [0-9]
 underscore _
 dollar_sign \$
+open_brace \{
+close_brace \}
 
 class_first_char {letter}|{underscore}|{dollar_sign}
 class_char {letter}|{digit}|{underscore}|{dollar_sign}
@@ -34,13 +39,22 @@ start_block_comment "/*"
 end_block_comment "*/"
 
 %option stack
-%s CLASS_DEFINITION
+
+/* next token will be the class keyword */
+%s CLASS_KEYWORD
+/* next token will be a class name*/
+%s CLASS_NAME
+/* next token will be a semicolon */
+%s SEMICOLON
+
+%s INSIDE_CLASS
+%s OTHER_IMBRICATION
+
+
 %x LINE_COMMENT
 %x BLOCK_COMMENT
 
 %%
-{class_keyword} {BEGIN CLASS_DEFINITION;}
-
 {start_line_comment} {
     yy_push_state(LINE_COMMENT);
 }
@@ -53,21 +67,49 @@ end_block_comment "*/"
 <BLOCK_COMMENT>{end_block_comment} {yy_pop_state();}
 <BLOCK_COMMENT>. { /* ignore */}
 
-<CLASS_DEFINITION>{whitespace} { /* ignore whitespace */ }
-<CLASS_DEFINITION>{class_name}  {
+
+<INITIAL>{public_keyword} {
+    if (isPublicClassDeclared) {
+        // print the rest of the text
+
+
+        cout << "Eroare: 2 sau mai multe clase publice detectate" << endl;
+        exit(1);
+    }
+
+    isPublicClassDeclared = true;
+    BEGIN CLASS_KEYWORD;
+}
+<INITIAL>{class_keyword} { BEGIN CLASS_NAME; }
+
+<CLASS_KEYWORD>{class_keyword} {BEGIN CLASS_NAME;}
+
+<CLASS_NAME>{class_name}  {
     if (classes.find(yytext) != classes.end()) {
         cout << "Class already defined: " << yytext << endl;
         exit(1);
     }
 
     classes[yytext] = new Class(yytext);
-    BEGIN(INITIAL);
+    BEGIN(SEMICOLON);
 }
-<CLASS_DEFINITION>{digit}{class_char}+  {
+
+<CLASS_NAME>{digit}{class_char}+  {
     cout << "Invalid class name: " << yytext << endl;
     exit(1);
 }
 
+<SEMICOLON>{open_brace} { BEGIN(INSIDE_CLASS); }
+
+<INSIDE_CLASS>{open_brace} { yy_push_state(OTHER_IMBRICATION); }
+<INSIDE_CLASS>{close_brace} { BEGIN(INITIAL); }
+<INSIDE_CLASS>.|\n { /* ignore */ }
+
+<OTHER_IMBRICATION>{close_brace} { yy_pop_state(); }
+
+
+
+{whitespace} { /* ignore whitespace */ }
 .|\n  {}
 %%
 
