@@ -23,6 +23,7 @@ unordered_map<string, Class *> classes;
 class_keyword "class"
 public_keyword "public"
 extends_keyword "extends"
+implements_keyword "implements"
 
 whitespace [ \t\n\r\f\v]+
 letter [a-zA-Z]
@@ -100,6 +101,7 @@ end_block_comment "*/"
 
 <CLASS_NAME>{open_brace} { BEGIN(INSIDE_CLASS); }
 <CLASS_NAME>{extends_keyword}{whitespace}{class_name} { /* ignore */ }
+<CLASS_NAME>{implements_keyword}{whitespace}{class_name} { /* ignore */ }
 
 
 <INSIDE_CLASS>{open_brace} { yy_push_state(OTHER_IMBRICATION); }
