@@ -10,9 +10,11 @@ class Class
  public:
     Class(string name) : name(name) {
         objectCount = 0;
+        defined = false;
     }
 
     string name;
+    bool defined;
     unsigned int objectCount;
     unordered_map<string, bool> attributes;
 };
@@ -91,6 +93,7 @@ end_block_comment "*/"
     }
 
     classes[yytext] = new Class(yytext);
+    classes[yytext]->defined = true;
     BEGIN(CLASS_NAME);
 }
 
