@@ -40,12 +40,12 @@ end_block_comment "*/"
 
 %option stack
 
-/* next token will be the class keyword */
-%s CLASS_KEYWORD
-/* next token will be a class name*/
+/* after public class keyword, next token will be the class keyword */
+%s PUBLIC_CLASS_START
+/* after class definition, next token will be a class name*/
+%s CLASS_START
+/* after class name, next token will be an open brace or extends */
 %s CLASS_NAME
-/* next token will be an open brace */
-%s OPEN_BRACE
 
 %s INSIDE_CLASS
 %s OTHER_IMBRICATION
@@ -75,28 +75,28 @@ end_block_comment "*/"
     }
 
     isPublicClassDeclared = true;
-    BEGIN CLASS_KEYWORD;
+    BEGIN PUBLIC_CLASS_START;
 }
-<INITIAL>{class_keyword} { BEGIN CLASS_NAME; }
+<INITIAL>{class_keyword} { BEGIN CLASS_START; }
 
-<CLASS_KEYWORD>{class_keyword} {BEGIN CLASS_NAME;}
+<PUBLIC_CLASS_START>{class_keyword} {BEGIN CLASS_START;}
 
-<CLASS_NAME>{class_name}  {
+<CLASS_START>{class_name}  {
     if (classes.find(yytext) != classes.end()) {
         cout << "Class already defined: " << yytext << endl;
         exit(1);
     }
 
     classes[yytext] = new Class(yytext);
-    BEGIN(OPEN_BRACE);
+    BEGIN(CLASS_NAME);
 }
 
-<CLASS_NAME>{digit}{class_char}+  {
+<CLASS_START>{digit}{class_char}+  {
     cout << "Invalid class name: " << yytext << endl;
     exit(1);
 }
 
-<OPEN_BRACE>{open_brace} { BEGIN(INSIDE_CLASS); }
+<CLASS_NAME>{open_brace} { BEGIN(INSIDE_CLASS); }
 
 <INSIDE_CLASS>{open_brace} { yy_push_state(OTHER_IMBRICATION); }
 <INSIDE_CLASS>{close_brace} { BEGIN(INITIAL); }
@@ -105,7 +105,6 @@ end_block_comment "*/"
 <OTHER_IMBRICATION>{close_brace} { yy_pop_state(); }
 <OTHER_IMBRICATION>{open_brace} { yy_push_state(OTHER_IMBRICATION); }
 <OTHER_IMBRICATION>.|\n { /* ignore */ }
-
 
 
 {whitespace} { /* ignore whitespace */ }
