@@ -1,11 +1,11 @@
 /*class FakeOut {
- 
+
   }
 */
 
 class Comments {
-	int a;
-	float b;	
+	private int a;
+	private float b;
 	// class FakeOut
 }
 
