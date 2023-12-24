@@ -1,3 +1,5 @@
+/* Dumitrache Adrian-George 334CC */
+
 %{
 #include <bits/stdc++.h>
 using namespace std;
@@ -74,6 +76,7 @@ class_keyword "class"
 public_keyword "public"
 private_keyword "private"
 extends_keyword "extends"
+for_keyword "for"
 new_keyword "new"
 implements_keyword "implements"
 static_keyword "static"
@@ -144,6 +147,12 @@ end_block_comment "*/"
 %s OBJECT_DECLARATION_INIT_ARRAY
 %s UNTIL_SEMICOLON
 %s ASSIGNMENT_VARIABLE
+
+%s FOR_START
+%s FOR_ONE_LINE
+%s FOR_LINES
+%s FOR_ASSIGNMENT
+%s NEW_OBJECT_IN_FOR
 
 %s OTHER_IMBRICATION
 
@@ -324,6 +333,40 @@ end_block_comment "*/"
     BEGIN(OBJECT_DECLARATION_INIT);
 }
 
+<MAIN>{for_keyword}{possible_whitespace}{open_parenthesis} {
+    yy_push_state(FOR_START);
+}
+
+<FOR_START>. { /* ignore */ }
+<FOR_START>{close_parenthesis} { BEGIN(FOR_ONE_LINE); }
+<FOR_START>{close_parenthesis}{possible_whitespace}{open_brace} { BEGIN(FOR_LINES); }
+
+<FOR_ONE_LINE>{identifier}{possible_whitespace}{open_square_bracket}{identifier}{close_square_bracket}{possible_whitespace}{equal_sign} {
+    currentDefinitionName = yytext;
+    cout << "Array assignment" << endl;
+    yy_push_state(FOR_ASSIGNMENT);
+}
+<FOR_ONE_LINE>{semicolon} { yy_pop_state(); }
+<FOR_ONE_LINE>. { /* ignore */ }
+
+<FOR_LINES>{identifier}/{possible_whitespace}{open_square_bracket}{identifier}{close_square_bracket}{possible_whitespace}{equal_sign} {
+    currentDefinitionName = yytext;
+    yy_push_state(FOR_ASSIGNMENT);
+}
+<FOR_LINES>{close_brace} { yy_pop_state(); }
+<FOR_LINES>. { /* ignore */ }
+
+<FOR_ASSIGNMENT>{possible_whitespace}{open_square_bracket}{identifier}{close_square_bracket}{possible_whitespace}{equal_sign}{possible_whitespace}{new_keyword} {BEGIN(NEW_OBJECT_IN_FOR); }
+<NEW_OBJECT_IN_FOR>{identifier} {
+    if (classes.find(yytext) == classes.end()) {
+        classes[yytext] = new Class(yytext);
+    }
+
+    classes[yytext]->objectCount += mainMethod->attributes[currentDefinitionName]->arraySize;
+
+    yy_pop_state();
+}
+
 <MAIN>{open_brace} { yy_push_state(OTHER_IMBRICATION); }
 <MAIN>{close_brace} { yy_pop_state(); }
 <MAIN>.|\n { /* ignore */ }
@@ -475,8 +518,16 @@ int main(int argc, char **argv)
         } else {
             bool print = true;
             for (auto it2 = it->second->attributes.begin(); it2 != it->second->attributes.end(); it2++) {
-                if (!it2->second->hasGet || !it2->second->hasSet) {
-                    cout << "Metodele 'get' si 'set' nu sunt implementate." << endl;
+                if (!it2->second->hasGet) {
+                    cout << "Metoda 'get' nu este implementata pentru toate atributele." << endl;
+                    print = false;
+                    break;
+                }
+            }
+
+            for (auto it2 = it->second->attributes.begin(); it2 != it->second->attributes.end(); it2++) {
+                if (!it2->second->hasGet) {
+                    cout << "Metoda 'set' nu este implementata pentru toate atributele." << endl;
                     print = false;
                     break;
                 }
