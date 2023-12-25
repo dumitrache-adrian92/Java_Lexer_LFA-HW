@@ -6,15 +6,8 @@ using namespace std;
 extern "C" int yylex();
 
 bool isPublicClassDeclared = false;
-
-enum AccessModifier {
-    PUBLIC,
-    PRIVATE
-};
-
 bool isPublic;
 string currentClass;
-AccessModifier currentDefinitionAccessModifier;
 string currentDefinitionType;
 string currentDefinitionName;
 bool isArray;
@@ -57,8 +50,7 @@ class Class
 class MainMethod
 {
     public:
-        MainMethod() {
-        }
+        MainMethod() {}
 
         unordered_map<string, Attribute *> attributes;
 };
@@ -71,7 +63,7 @@ bool isPrimitive(string type) {
 unordered_map<string, Class *> classes;
 MainMethod *mainMethod = new MainMethod();
 %}
-
+/* Java keywords */
 class_keyword "class"
 public_keyword "public"
 private_keyword "private"
@@ -82,12 +74,12 @@ implements_keyword "implements"
 static_keyword "static"
 main_keyword "main"
 void_keyword "void"
-main_arg_type "String\[\]"
-main_arg_name "args"
+
 
 set "set"
 get "get"
 
+/* special java characters */
 whitespace [ \t\n\r\f\v]+
 possible_whitespace [ \t\n\r\f\v]*
 letter [a-zA-Z]
@@ -103,9 +95,15 @@ close_parenthesis \)
 open_square_bracket \[
 close_square_bracket \]
 
+/* used for detecting the main method */
+main_arg_type "String\[\]"
+main_arg_name "args"
 public_static_void_main {public_keyword}{whitespace}{static_keyword}{whitespace}{void_keyword}{whitespace}{main_keyword}{possible_whitespace}{open_parenthesis}{possible_whitespace}{main_arg_type}{possible_whitespace}{main_arg_name}{possible_whitespace}{close_parenthesis}
+
+/* an integer */
 integer [1-9]{digit}*
 
+/* representation of a Java identifier (class names, method names, variable names etc.) */
 identifier_first_char {letter}|{underscore}|{dollar_sign}
 identifier_char {letter}|{digit}|{underscore}|{dollar_sign}
 identifier {identifier_first_char}{identifier_char}*
@@ -138,7 +136,7 @@ end_block_comment "*/"
 /* after type, name and = of definition */
 %s FIELD_INIT
 
-
+/* inside main method */
 %s MAIN
 %s PRIMITIVE_DECLARATION
 %s OBJECT_DECLARATION_TYPE
@@ -148,6 +146,7 @@ end_block_comment "*/"
 %s UNTIL_SEMICOLON
 %s ASSIGNMENT_VARIABLE
 
+/* inside for in main method */
 %s FOR_START
 %s FOR_ONE_LINE
 %s FOR_LINES
@@ -156,11 +155,11 @@ end_block_comment "*/"
 
 %s OTHER_IMBRICATION
 
-
 %x LINE_COMMENT
 %x BLOCK_COMMENT
 
 %%
+/* comment handling, works in any state since comments can be found in any state */
 {start_line_comment} {
     yy_push_state(LINE_COMMENT);
 }
@@ -173,7 +172,7 @@ end_block_comment "*/"
 <BLOCK_COMMENT>{end_block_comment} {yy_pop_state();}
 <BLOCK_COMMENT>.|\n { /* ignore */}
 
-
+/* intially, we're looking for the start of a class, whether it's a public or regular class */
 <INITIAL>{public_keyword} {
     if (isPublicClassDeclared) {
         cout << "Eroare: 2 sau mai multe clase publice detectate" << endl;
@@ -188,6 +187,7 @@ end_block_comment "*/"
 
 <PUBLIC_CLASS_START>{class_keyword} {BEGIN CLASS_START;}
 
+/* get class name and save it */
 <CLASS_START>{identifier}  {
     if (classes.find(yytext) != classes.end() && classes[yytext]->defined) {
         cout << "Clasa deja definita: " << yytext << endl;
@@ -203,15 +203,18 @@ end_block_comment "*/"
     BEGIN(CLASS_NAME);
 }
 
+/* Relevant error for identifiers that start with a digit but are fine otherwise */
 <CLASS_START>{digit}{identifier_char}+  {
     cout << "Nume invalid de clasa: " << yytext << endl;
     exit(1);
 }
 
+/* skip java syntax that we don't care about so we can start parsing the class */
 <CLASS_NAME>{open_brace} { BEGIN(INSIDE_CLASS); }
 <CLASS_NAME>{extends_keyword}{whitespace}{identifier} { /* ignore */ }
 <CLASS_NAME>{implements_keyword}{whitespace}{identifier} { /* ignore */ }
 
+/* in a class we care about storing attributes, verifying if a method is a getter, setter or the main method */
 <INSIDE_CLASS>{public_static_void_main}{possible_whitespace}{open_brace} {
     if (!classes[currentClass]->isPublic) {
         cout << "Eroare: Metoda main declarata intr-o clasa ce nu este publica." << endl;
@@ -223,15 +226,16 @@ end_block_comment "*/"
 <INSIDE_CLASS>{open_brace} { yy_push_state(OTHER_IMBRICATION); }
 <INSIDE_CLASS>{close_brace} { BEGIN(INITIAL); }
 <INSIDE_CLASS>{public_keyword} {
-    currentDefinitionAccessModifier = PUBLIC;
     yy_push_state(PUBLIC_INSIDE_CLASS);
 }
 <INSIDE_CLASS>{private_keyword} {
-    currentDefinitionAccessModifier = PRIVATE;
     yy_push_state(PRIVATE_INSIDE_CLASS);
 }
+
+/* nothing inside the class matters but attributes and methods */
 <INSIDE_CLASS>.|\n { /* ignore */ }
 
+/* detect variables that could be instantiated and instations of variables */
 <MAIN>{identifier}/{whitespace}{identifier}{possible_whitespace}{semicolon} {
     if (isPrimitive(yytext)) {
         yy_push_state(PRIMITIVE_DECLARATION);
@@ -371,6 +375,7 @@ end_block_comment "*/"
 <MAIN>{close_brace} { yy_pop_state(); }
 <MAIN>.|\n { /* ignore */ }
 
+/* detect public/private methods and fields */
 <PUBLIC_INSIDE_CLASS>{identifier} {
     currentDefinitionType = yytext;
     BEGIN(TYPE);
@@ -469,16 +474,17 @@ end_block_comment "*/"
     /* ignore */
 }
 
-
+/* used in classes and main methods with the purpose of determining the correct
+ * closing bracket of a class */
 <OTHER_IMBRICATION>{close_brace} { yy_pop_state(); }
 <OTHER_IMBRICATION>{open_brace} { yy_push_state(OTHER_IMBRICATION); }
 <OTHER_IMBRICATION>.|\n { /* ignore */ }
 
-
+/* used by all states to skip white space */
 {whitespace} { /* ignore whitespace */ }
 
+/* if no rules match, we've found an invalid token */
 . {
-    cout << "Invalid token: " << yytext << endl;
     cout << "Invalid token" << endl;
     exit(1);
 }
@@ -486,12 +492,14 @@ end_block_comment "*/"
 
 int main(int argc, char **argv)
 {
+    // get input
     yyin = fopen(argv[1], "r");
     if (!yyin) {
         cout << "File not found" << endl;
         exit(1);
     }
 
+    // start lexing
     yylex();
 
     // print number of classes and their names
@@ -506,10 +514,12 @@ int main(int argc, char **argv)
             cout << endl;
     }
 
+    // print number of objects for each class
     for (auto it = classes.begin(); it != classes.end(); it++) {
         cout << "Obiecte " << it->first << ": " << it->second->objectCount << endl;
     }
 
+    // print whether all attributes have getters and setters or not
     for (auto it = classes.begin(); it != classes.end(); it++) {
         cout << it->first << ": ";
 
