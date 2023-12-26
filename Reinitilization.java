@@ -1,3 +1,4 @@
+// Dumitrache Adrian-George 334CC
 public class MemoryAllocation {
     public static void main(String[] args) {
         int[] intArray = new int[10];
