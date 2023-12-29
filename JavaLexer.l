@@ -21,12 +21,14 @@ class Attribute
         hasGet = false;
         isArray = false;
         initialized = false;
+        isArrayInitialized = false;
     }
     string name;
     string type;
     bool hasSet;
     bool hasGet;
     bool isArray;
+    bool isArrayInitialized;
     bool initialized;
     int arraySize;
 };
@@ -159,8 +161,9 @@ end_block_comment "*/"
 %x BLOCK_COMMENT
 
 %%
-/* comment handling, works in any state since comments can be found in any state */
 {start_line_comment} {
+    /* comment handling, works in any state since comments can be found in any
+     * state */
     yy_push_state(LINE_COMMENT);
 }
 <LINE_COMMENT>\n {yy_pop_state();}
@@ -172,8 +175,10 @@ end_block_comment "*/"
 <BLOCK_COMMENT>{end_block_comment} {yy_pop_state();}
 <BLOCK_COMMENT>.|\n { /* ignore */}
 
-/* intially, we're looking for the start of a class, whether it's a public or regular class */
 <INITIAL>{public_keyword} {
+    /* intially, we're looking for the start of a class, whether it's a
+     * public or regular class */
+
     if (isPublicClassDeclared) {
         cout << "Eroare: 2 sau mai multe clase publice detectate" << endl;
         exit(1);
@@ -187,8 +192,8 @@ end_block_comment "*/"
 
 <PUBLIC_CLASS_START>{class_keyword} {BEGIN CLASS_START;}
 
-/* get class name and save it */
 <CLASS_START>{identifier}  {
+    /* get class name and save it */
     if (classes.find(yytext) != classes.end() && classes[yytext]->defined) {
         cout << "Clasa deja definita: " << yytext << endl;
         exit(1);
@@ -203,19 +208,19 @@ end_block_comment "*/"
     BEGIN(CLASS_NAME);
 }
 
-/* Relevant error for identifiers that start with a digit but are fine otherwise */
 <CLASS_START>{digit}{identifier_char}+  {
+    /* Relevant error for identifiers that start with a digit but are fine
+     * otherwise */
     cout << "Nume invalid de clasa: " << yytext << endl;
     exit(1);
 }
 
-/* skip java syntax that we don't care about so we can start parsing the class */
 <CLASS_NAME>{open_brace} { BEGIN(INSIDE_CLASS); }
 <CLASS_NAME>{extends_keyword}{whitespace}{identifier} { /* ignore */ }
 <CLASS_NAME>{implements_keyword}{whitespace}{identifier} { /* ignore */ }
 
-/* in a class we care about storing attributes, verifying if a method is a getter, setter or the main method */
 <INSIDE_CLASS>{public_static_void_main}{possible_whitespace}{open_brace} {
+    /* in a class we care about storing attributes, verifying if a method is a getter, setter or the main method */
     if (!classes[currentClass]->isPublic) {
         cout << "Eroare: Metoda main declarata intr-o clasa ce nu este publica." << endl;
         exit(1);
@@ -232,11 +237,10 @@ end_block_comment "*/"
     yy_push_state(PRIVATE_INSIDE_CLASS);
 }
 
-/* nothing inside the class matters but attributes and methods */
 <INSIDE_CLASS>.|\n { /* ignore */ }
 
-/* detect variables that could be instantiated and instations of variables */
 <MAIN>{identifier}/{whitespace}{identifier}{possible_whitespace}{semicolon} {
+    /* detect variables that could be instantiated and instations of variables */
     if (isPrimitive(yytext)) {
         yy_push_state(PRIMITIVE_DECLARATION);
     }  else {
@@ -315,6 +319,7 @@ end_block_comment "*/"
 
 <OBJECT_DECLARATION_INIT_ARRAY>{integer} {
     mainMethod->attributes[currentDefinitionName]->arraySize = stoi(yytext);
+    mainMethod->attributes[currentDefinitionName]->isArrayInitialized = true;
 
     BEGIN(UNTIL_SEMICOLON);
 }
@@ -362,6 +367,11 @@ end_block_comment "*/"
 
 <FOR_ASSIGNMENT>{possible_whitespace}{open_square_bracket}{identifier}{close_square_bracket}{possible_whitespace}{equal_sign}{possible_whitespace}{new_keyword} {BEGIN(NEW_OBJECT_IN_FOR); }
 <NEW_OBJECT_IN_FOR>{identifier} {
+    if (!mainMethod->attributes[currentDefinitionName]->isArrayInitialized) {
+        cout << "Eroare: instantiere obiect intr-un array neinitializat" << endl;
+        exit(1);
+    }
+
     if (classes.find(yytext) == classes.end()) {
         classes[yytext] = new Class(yytext);
     }
@@ -375,8 +385,8 @@ end_block_comment "*/"
 <MAIN>{close_brace} { yy_pop_state(); }
 <MAIN>.|\n { /* ignore */ }
 
-/* detect public/private methods and fields */
 <PUBLIC_INSIDE_CLASS>{identifier} {
+    /* detect public/private methods and fields */
     currentDefinitionType = yytext;
     BEGIN(TYPE);
 }
@@ -474,17 +484,18 @@ end_block_comment "*/"
     /* ignore */
 }
 
-/* used in classes and main methods with the purpose of determining the correct
- * closing bracket of a class */
-<OTHER_IMBRICATION>{close_brace} { yy_pop_state(); }
+
+<OTHER_IMBRICATION>{close_brace} {
+    /* used in classes and main methods with the purpose of determining the correct
+     * closing bracket of a class */
+    yy_pop_state(); }
 <OTHER_IMBRICATION>{open_brace} { yy_push_state(OTHER_IMBRICATION); }
 <OTHER_IMBRICATION>.|\n { /* ignore */ }
 
-/* used by all states to skip white space */
-{whitespace} { /* ignore whitespace */ }
+{whitespace} { /* ignore whitespace, used by all states */ }
 
-/* if no rules match, we've found an invalid token */
 . {
+    /* if no rules match, we've found an invalid token */
     cout << "Invalid token" << endl;
     exit(1);
 }
